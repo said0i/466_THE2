@@ -82,7 +82,7 @@ def apply_blur(step_idx, images):
 
     return results
 
-# TODO: FINISH THIS FUNCTION
+# TODO: Check if this function is working correctly.
 def binarize(images):
     results = []
     for idx, img in enumerate(images):
@@ -106,6 +106,13 @@ def binarize(images):
     return results
 
 # Q2 ##################
+def apply_filter_q2(color_channel, mask):
+    dft_shift = np.fft.fftshift(cv2.dft(np.float32(color_channel), flags=cv2.DFT_COMPLEX_OUTPUT))
+    filtered_shift = dft_shift * mask[..., np.newaxis]
+    inverse_shift = np.fft.ifftshift(filtered_shift)
+    inverse_dft = cv2.idft(inverse_shift, flags=cv2.DFT_SCALE | cv2.DFT_REAL_OUTPUT)
+    return cv2.normalize(inverse_dft, None, 0, 255, cv2.NORM_MINMAX)
+
 def create_write_magnitude_spectrum(list_of_image_tuples):
     for name, image in list_of_image_tuples:
         channels = cv2.split(image)
@@ -114,8 +121,8 @@ def create_write_magnitude_spectrum(list_of_image_tuples):
         for idx, channel in enumerate(channels):
             f = np.fft.fft2(channel)
             fshift = np.fft.fftshift(f)   
-            magnitude = 10*np.log(1 + np.abs(fshift))
-            write_image(magnitude, f"q2/{name}_magnitude_{channel_names[idx]}.png")
+            magnitude = 20*np.log(1 + np.abs(fshift))
+            write_image(magnitude, f"{name}_magnitude_{channel_names[idx]}.png")
 
 def apply_gaussian_blur(list_of_image_tuples):
     for name, ksize, img in list_of_image_tuples:
@@ -131,8 +138,6 @@ def ilpf(list_of_image_tuples):
     for name, r, img in list_of_image_tuples:
         rows, cols, _= img.shape
         crow, ccol = rows//2, cols//2
-        # Split channels
-        b_img, g_img, r_img = cv2.split(img)
 
         if isinstance(r, tuple):
             r_b, r_g, r_r = r  # Different cutoff for blue, green, and red
@@ -144,23 +149,16 @@ def ilpf(list_of_image_tuples):
             y, x = np.ogrid[:rows, :cols]
             distance = np.sqrt((x - ccol)**2 + (y - crow)**2)
             mask =  (distance <= r_value).astype(np.uint8)
-            return np.stack([mask, mask], axis=2)
+            return mask
         mask_b = create_mask(r_b)
         mask_g = create_mask(r_g)
         mask_r = create_mask(r_r)
 
-        # Fourier Transform and filter
-        # For each color channel
-        def apply_filter(color_channel, mask):
-            dft_shift = np.fft.fftshift(cv2.dft(np.float32(color_channel), flags=cv2.DFT_COMPLEX_OUTPUT))
-            filtered_shift = dft_shift * mask
-            inverse_dft = cv2.idft(np.fft.ifftshift(filtered_shift))
-            magnitude = cv2.magnitude(inverse_dft[:, :, 0], inverse_dft[:, :, 1])
-            return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
-
-        b_filtered = apply_filter(b_img, mask_b)
-        g_filtered = apply_filter(g_img, mask_g)
-        r_filtered = apply_filter(r_img, mask_r)
+        # Split channels and apply Fourier Transform
+        b_img, g_img, r_img = cv2.split(img)
+        b_filtered = apply_filter_q2(b_img, mask_b)
+        g_filtered = apply_filter_q2(g_img, mask_g)
+        r_filtered = apply_filter_q2(r_img, mask_r)
 
         r_img = cv2.merge((b_filtered, g_filtered, r_filtered))
         
@@ -190,7 +188,7 @@ def bp(list_of_image_tuples):
             y, x = np.ogrid[:rows, :cols]
             distance = np.sqrt((x - ccol) ** 2 + (y - crow) ** 2)
             mask =  ((distance >= r1_value) & (distance <= r2_value)).astype(np.uint8)
-            return np.stack([mask, mask], axis=2)
+            return mask
 
         mask_b = create_mask(r1_b, r2_b)
         mask_g = create_mask(r1_g, r2_g)
@@ -198,17 +196,9 @@ def bp(list_of_image_tuples):
 
         # Split channels and apply Fourier Transform
         b_img, g_img, r_img = cv2.split(img)
-
-        def apply_filter(color_channel, mask):
-            dft_shift = np.fft.fftshift(cv2.dft(np.float32(color_channel), flags=cv2.DFT_COMPLEX_OUTPUT))
-            filtered_shift = dft_shift * mask
-            inverse_dft = cv2.idft(np.fft.ifftshift(filtered_shift))
-            magnitude = cv2.magnitude(inverse_dft[:, :, 0], inverse_dft[:, :, 1])
-            return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
-
-        b_filtered = apply_filter(b_img, mask_b)
-        g_filtered = apply_filter(g_img, mask_g)
-        r_filtered = apply_filter(r_img, mask_r)
+        b_filtered = apply_filter_q2(b_img, mask_b)
+        g_filtered = apply_filter_q2(g_img, mask_g)
+        r_filtered = apply_filter_q2(r_img, mask_r)
 
         r_img = cv2.merge((b_filtered, g_filtered, r_filtered))
 
@@ -239,7 +229,7 @@ def br(list_of_image_tuples):
             y, x = np.ogrid[:rows, :cols]
             distance = np.sqrt((x - ccol) ** 2 + (y - crow) ** 2)
             mask = ((distance <= r1_value) | (distance >= r2_value)).astype(np.uint8)
-            return np.stack([mask, mask], axis=2)
+            return mask
 
         mask_b = create_mask(r1_b, r2_b)
         mask_g = create_mask(r1_g, r2_g)
@@ -247,22 +237,14 @@ def br(list_of_image_tuples):
 
         # Split channels and apply Fourier Transform
         b_img, g_img, r_img = cv2.split(img)
-
-        def apply_filter(color_channel, mask):
-            dft_shift = np.fft.fftshift(cv2.dft(np.float32(color_channel), flags=cv2.DFT_COMPLEX_OUTPUT))
-            filtered_shift = dft_shift * mask
-            inverse_dft = cv2.idft(np.fft.ifftshift(filtered_shift))
-            magnitude = cv2.magnitude(inverse_dft[:, :, 0], inverse_dft[:, :, 1])
-            return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
-
-        b_filtered = apply_filter(b_img, mask_b)
-        g_filtered = apply_filter(g_img, mask_g)
-        r_filtered = apply_filter(r_img, mask_r)
+        b_filtered = apply_filter_q2(b_img, mask_b)
+        g_filtered = apply_filter_q2(g_img, mask_g)
+        r_filtered = apply_filter_q2(r_img, mask_r)
 
         r_img = cv2.merge((b_filtered, g_filtered, r_filtered))
 
         # You can see the effect of applying br.
-        create_write_magnitude_spectrum([(name+'br',r_img)])
+        # create_write_magnitude_spectrum([(name+'br',r_img)])
 
         write_image(r_img, f"q2/br/{name}_br.png")
 ################## Q2 END ##################
@@ -319,6 +301,7 @@ if __name__ == '__main__':
     img_b2 = read_image('b2.jpg')
     img_b3 = read_image('b3.jpg')
 
+    # Arbitrary cutoff are used, change whenever needed.
     # Spatial domain
     # Arguments type: (Image name, kernel size, image)
     # Gaussian Filter
@@ -334,7 +317,7 @@ if __name__ == '__main__':
     ilpf([('b1', (50, 35, 35), img_b1), ('b2', 30, img_b2), ('b3', (35, 50, 35), img_b3)])
 
     # Band Pass Filter
-    common_cutoff=((5,5,5),(50,50,50))
+    common_cutoff=((3,3,3),(40,40,40))
     bp([('b1', common_cutoff, img_b1), ('b2', common_cutoff, img_b2), ('b3', common_cutoff, img_b3)])
 
     # Band Reject Filter
