@@ -3,6 +3,7 @@
 
 import numpy as np
 import cv2 
+import os
 
 input_folder = 'THE2_Images/'
 output_folder = 'THE2_Outputs/'
@@ -111,10 +112,9 @@ def create_write_magnitude_spectrum(list_of_image_tuples):
         channel_names = ['B', 'G', 'R']
         
         for idx, channel in enumerate(channels):
-            dft = cv2.dft(np.float32(channel), flags=cv2.DFT_COMPLEX_OUTPUT)
-            dft_shift = np.fft.fftshift(dft)
-            magnitude = cv2.magnitude(dft_shift[:,:,0],dft_shift[:,:,1])
-            magnitude = cv2.normalize(np.log(1 + magnitude), None, 0, 255, cv2.NORM_MINMAX)
+            f = np.fft.fft2(channel)
+            fshift = np.fft.fftshift(f)   
+            magnitude = 10*np.log(1 + np.abs(fshift))
             write_image(magnitude, f"q2/{name}_magnitude_{channel_names[idx]}.png")
 
 def apply_gaussian_blur(list_of_image_tuples):
@@ -143,7 +143,8 @@ def ilpf(list_of_image_tuples):
         def create_mask(r_value):
             y, x = np.ogrid[:rows, :cols]
             distance = np.sqrt((x - ccol)**2 + (y - crow)**2)
-            return (distance <= r_value).astype(np.uint8)
+            mask =  (distance <= r_value).astype(np.uint8)
+            return np.stack([mask, mask], axis=2)
         mask_b = create_mask(r_b)
         mask_g = create_mask(r_g)
         mask_r = create_mask(r_r)
@@ -152,7 +153,7 @@ def ilpf(list_of_image_tuples):
         # For each color channel
         def apply_filter(color_channel, mask):
             dft_shift = np.fft.fftshift(cv2.dft(np.float32(color_channel), flags=cv2.DFT_COMPLEX_OUTPUT))
-            filtered_shift = dft_shift * mask[:, :, None]
+            filtered_shift = dft_shift * mask
             inverse_dft = cv2.idft(np.fft.ifftshift(filtered_shift))
             magnitude = cv2.magnitude(inverse_dft[:, :, 0], inverse_dft[:, :, 1])
             return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
@@ -163,7 +164,7 @@ def ilpf(list_of_image_tuples):
 
         r_img = cv2.merge((b_filtered, g_filtered, r_filtered))
         
-        # One can see the effect of applying ilpf. A white circle at the center.
+        # You can see the effect of applying ilpf.
         # create_write_magnitude_spectrum([(name+'ilpf',r_img)])
 
         write_image(r_img, f"q2/ilpf/{name}_ilpf.png")
@@ -188,7 +189,8 @@ def bp(list_of_image_tuples):
         def create_mask(r1_value, r2_value):
             y, x = np.ogrid[:rows, :cols]
             distance = np.sqrt((x - ccol) ** 2 + (y - crow) ** 2)
-            return ((distance >= r1_value) & (distance <= r2_value)).astype(np.float32)
+            mask =  ((distance >= r1_value) & (distance <= r2_value)).astype(np.uint8)
+            return np.stack([mask, mask], axis=2)
 
         mask_b = create_mask(r1_b, r2_b)
         mask_g = create_mask(r1_g, r2_g)
@@ -199,7 +201,7 @@ def bp(list_of_image_tuples):
 
         def apply_filter(color_channel, mask):
             dft_shift = np.fft.fftshift(cv2.dft(np.float32(color_channel), flags=cv2.DFT_COMPLEX_OUTPUT))
-            filtered_shift = dft_shift * mask[:, :, None]
+            filtered_shift = dft_shift * mask
             inverse_dft = cv2.idft(np.fft.ifftshift(filtered_shift))
             magnitude = cv2.magnitude(inverse_dft[:, :, 0], inverse_dft[:, :, 1])
             return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
@@ -208,9 +210,12 @@ def bp(list_of_image_tuples):
         g_filtered = apply_filter(g_img, mask_g)
         r_filtered = apply_filter(r_img, mask_r)
 
-        filtered_img = cv2.merge((b_filtered, g_filtered, r_filtered))
+        r_img = cv2.merge((b_filtered, g_filtered, r_filtered))
 
-        write_image(filtered_img, f"q2/bp/{name}_bp.png")
+        # You can see the effect of applying bp.
+        # create_write_magnitude_spectrum([(name+'bp',r_img)])
+
+        write_image(r_img, f"q2/bp/{name}_bp.png")
 
 
 def br(list_of_image_tuples):
@@ -233,7 +238,8 @@ def br(list_of_image_tuples):
         def create_mask(r1_value, r2_value):
             y, x = np.ogrid[:rows, :cols]
             distance = np.sqrt((x - ccol) ** 2 + (y - crow) ** 2)
-            return ((distance < r1_value) | (distance > r2_value)).astype(np.float32)
+            mask = ((distance <= r1_value) | (distance >= r2_value)).astype(np.uint8)
+            return np.stack([mask, mask], axis=2)
 
         mask_b = create_mask(r1_b, r2_b)
         mask_g = create_mask(r1_g, r2_g)
@@ -244,7 +250,7 @@ def br(list_of_image_tuples):
 
         def apply_filter(color_channel, mask):
             dft_shift = np.fft.fftshift(cv2.dft(np.float32(color_channel), flags=cv2.DFT_COMPLEX_OUTPUT))
-            filtered_shift = dft_shift * mask[:, :, None]
+            filtered_shift = dft_shift * mask
             inverse_dft = cv2.idft(np.fft.ifftshift(filtered_shift))
             magnitude = cv2.magnitude(inverse_dft[:, :, 0], inverse_dft[:, :, 1])
             return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
@@ -253,13 +259,30 @@ def br(list_of_image_tuples):
         g_filtered = apply_filter(g_img, mask_g)
         r_filtered = apply_filter(r_img, mask_r)
 
-        filtered_img = cv2.merge((b_filtered, g_filtered, r_filtered))
+        r_img = cv2.merge((b_filtered, g_filtered, r_filtered))
 
-        write_image(filtered_img, f"q2/br/{name}_br.png")
+        # You can see the effect of applying br.
+        create_write_magnitude_spectrum([(name+'br',r_img)])
 
+        write_image(r_img, f"q2/br/{name}_br.png")
+################## Q2 END ##################
+
+def create_necessary_folders():
+    folders = {
+        "q1": ["step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8"],
+        "q2": ["bp", "br", "gaussian", "ilpf", "median"],
+    }
+
+    # Create the folders
+    for parent, subfolders in folders.items():
+        parent_path = os.path.join(output_folder, parent)
+        os.makedirs(parent_path, exist_ok=True)  # Create the parent folder if it doesn't exist
+        for subfolder in subfolders:
+            os.makedirs(os.path.join(parent_path, subfolder), exist_ok=True)  # Create subfolders
 
 if __name__ == '__main__':
 
+    create_necessary_folders()
     # Q1 - Pattern Extraction
     # Step 1: Convert to grayscale
     img_a1 = read_image('a1.png')
@@ -302,19 +325,20 @@ if __name__ == '__main__':
     apply_gaussian_blur([('b1', (21,21), img_b1), ('b2', (5,5), img_b2), ('b3', (5,5), img_b3)])
 
     # Median Filter
-    apply_median_blur([('b1', (15,15), img_b1), ('b2', (7,7), img_b2), ('b3', (7,7), img_b3)])
+    apply_median_blur([('b1', (15,15), img_b1), ('b2', (11,11), img_b2), ('b3', (7,7), img_b3)])
 
     # Frequency domain
     create_write_magnitude_spectrum([('b1', img_b1), ('b2', img_b2), ('b3', img_b3)])
     # Arguments type: (Image name, cutoff, image)
     # Ideal Low Pass Filter
-    ilpf([('b1', 30, img_b1), ('b2', 30, img_b2), ('b3', (35, 50, 35), img_b3)])
+    ilpf([('b1', (50, 35, 35), img_b1), ('b2', 30, img_b2), ('b3', (35, 50, 35), img_b3)])
 
     # Band Pass Filter
-    bp([('b1', (5, 30), img_b1), ('b2', (5, 30), img_b2), ('b3', (5, 30), img_b3)])
+    common_cutoff=((5,5,5),(50,50,50))
+    bp([('b1', common_cutoff, img_b1), ('b2', common_cutoff, img_b2), ('b3', common_cutoff, img_b3)])
 
     # Band Reject Filter
-    common_cutoff=(25,60)
-    br([('b1', common_cutoff, img_b1), ('b2', common_cutoff, img_b2), ('b3', common_cutoff, img_b3)])
+    common_cutoff=((35, 50, 30),(220, 220, 220))
+    br([('b1', ((100, 50, 30),(150, 150, 150)), img_b1), ('b2', common_cutoff, img_b2), ('b3', common_cutoff, img_b3)])
 
     ###################### Q3
