@@ -400,7 +400,7 @@ if __name__ == '__main__':
     os.makedirs(output_folder, exist_ok=True)
     image_names = ["c1", "c2", "c3"]
     image_paths = [input_folder+ name for name in image_names]
-    N_values = [1, 10, 50,100]
+    N_values = [1, 10, 50]
 
     for i,img_path in enumerate(image_paths):
         # Load grayscale image
