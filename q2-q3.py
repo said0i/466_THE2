@@ -25,7 +25,7 @@ def read_image(filename):
 def write_image(img, filename):
     cv2.imwrite(output_folder+filename, img)
 
-def apply_filter(image, kernel_dx, kernel_dy, step_idx, prefix):
+def apply_mask(image, kernel_dx, kernel_dy, step_idx, prefix):
     dx = cv2.filter2D(image, ddepth, kernel_dx)
     dy = cv2.filter2D(image, ddepth, kernel_dy)
 
@@ -48,15 +48,15 @@ def apply_edge_detectors(step_idx, images):
         prefix = f'img_{idx+1}'
         if type(img) == tuple:
             # Roberts, Prewitt, Sobel
-            roberts = apply_filter(img[0], roberts_dx, roberts_dy, step_idx, f'{prefix}_roberts')
-            prewitt = apply_filter(img[1], prewitt_dx, prewitt_dy, step_idx, f'{prefix}_prewitt')
-            sobel = apply_filter(img[2], sobel_dx, sobel_dy, step_idx, f'{prefix}_sobel')
+            roberts = apply_mask(img[0], roberts_dx, roberts_dy, step_idx, f'{prefix}_roberts')
+            prewitt = apply_mask(img[1], prewitt_dx, prewitt_dy, step_idx, f'{prefix}_prewitt')
+            sobel = apply_mask(img[2], sobel_dx, sobel_dy, step_idx, f'{prefix}_sobel')
             results.append((roberts, prewitt, sobel))
         else:
             # Roberts, Prewitt, Sobel
-            roberts = apply_filter(img, roberts_dx, roberts_dy, step_idx, f'{prefix}_roberts')
-            prewitt = apply_filter(img, prewitt_dx, prewitt_dy, step_idx, f'{prefix}_prewitt')
-            sobel = apply_filter(img, sobel_dx, sobel_dy, step_idx, f'{prefix}_sobel')
+            roberts = apply_mask(img, roberts_dx, roberts_dy, step_idx, f'{prefix}_roberts')
+            prewitt = apply_mask(img, prewitt_dx, prewitt_dy, step_idx, f'{prefix}_prewitt')
+            sobel = apply_mask(img, sobel_dx, sobel_dy, step_idx, f'{prefix}_sobel')
             results.append((roberts, prewitt, sobel))
 
     return results
@@ -82,7 +82,6 @@ def apply_blur(step_idx, images):
 
     return results
 
-# TODO: Check if this function is working correctly.
 def binarize(images):
     results = []
     for idx, img in enumerate(images):
@@ -101,12 +100,13 @@ def binarize(images):
         write_image(roberts, f'q1/step5/{prefix}_roberts_binary.png')
         write_image(prewitt, f'q1/step5/{prefix}_prewitt_binary.png')
         write_image(sobel, f'q1/step5/{prefix}_sobel_binary.png')
+
         results.append((roberts, prewitt, sobel))
 
     return results
 
 # Q2 ##################
-def apply_filter_q2(color_channel, mask):
+def apply_mask_q2(color_channel, mask):
     dft_shift = np.fft.fftshift(cv2.dft(np.float32(color_channel), flags=cv2.DFT_COMPLEX_OUTPUT))
     filtered_shift = dft_shift * mask[..., np.newaxis]
     inverse_shift = np.fft.ifftshift(filtered_shift)
@@ -156,9 +156,9 @@ def ilpf(list_of_image_tuples):
 
         # Split channels and apply Fourier Transform
         b_img, g_img, r_img = cv2.split(img)
-        b_filtered = apply_filter_q2(b_img, mask_b)
-        g_filtered = apply_filter_q2(g_img, mask_g)
-        r_filtered = apply_filter_q2(r_img, mask_r)
+        b_filtered = apply_mask_q2(b_img, mask_b)
+        g_filtered = apply_mask_q2(g_img, mask_g)
+        r_filtered = apply_mask_q2(r_img, mask_r)
 
         r_img = cv2.merge((b_filtered, g_filtered, r_filtered))
         
@@ -196,9 +196,9 @@ def bp(list_of_image_tuples):
 
         # Split channels and apply Fourier Transform
         b_img, g_img, r_img = cv2.split(img)
-        b_filtered = apply_filter_q2(b_img, mask_b)
-        g_filtered = apply_filter_q2(g_img, mask_g)
-        r_filtered = apply_filter_q2(r_img, mask_r)
+        b_filtered = apply_mask_q2(b_img, mask_b)
+        g_filtered = apply_mask_q2(g_img, mask_g)
+        r_filtered = apply_mask_q2(r_img, mask_r)
 
         r_img = cv2.merge((b_filtered, g_filtered, r_filtered))
 
@@ -237,9 +237,9 @@ def br(list_of_image_tuples):
 
         # Split channels and apply Fourier Transform
         b_img, g_img, r_img = cv2.split(img)
-        b_filtered = apply_filter_q2(b_img, mask_b)
-        g_filtered = apply_filter_q2(g_img, mask_g)
-        r_filtered = apply_filter_q2(r_img, mask_r)
+        b_filtered = apply_mask_q2(b_img, mask_b)
+        g_filtered = apply_mask_q2(g_img, mask_g)
+        r_filtered = apply_mask_q2(r_img, mask_r)
 
         r_img = cv2.merge((b_filtered, g_filtered, r_filtered))
 
